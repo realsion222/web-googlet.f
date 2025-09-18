@@ -8,15 +8,24 @@ const PORT = process.env.PORT || 3000;
 app.use(express.urlencoded({ extended: true }));
 
 app.get("/", (req, res) => {
-    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-    console.log("New visitor IP:", ip);
+    // Get IP address
+    const forwardedFor = req.headers["x-forwarded-for"];
+    const ip = forwardedFor ? forwardedFor.split(",")[0].trim() : req.socket.remoteAddress;
 
-    // Log IP to file
-    fs.appendFile("ips.txt", `${ip} - ${new Date().toLocaleString()}\n`, (err) => {
-        if (err) console.log(err);
+    // Get User-Agent
+    const userAgent = req.headers["user-agent"] || "Unknown";
+
+    // Log to console
+    console.log(`New visitor IP: ${ip}`);
+    console.log(`User-Agent: ${userAgent}`);
+
+    // Append to file
+    const logEntry = `${ip} | ${userAgent} | ${new Date().toLocaleString()}\n`;
+    fs.appendFile("ips.txt", logEntry, (err) => {
+        if (err) console.log("Error writing to file:", err);
     });
 
-    // Send dummy HTML page
+    // Send HTML page
     res.send(`
         <html>
             <head>
@@ -33,7 +42,7 @@ app.get("/", (req, res) => {
     `);
 });
 
-// Dummy POST endpoint (does nothing with the input)
+// POST handler
 app.post("/submit", (req, res) => {
     res.send(`
         <html>
