@@ -34,6 +34,41 @@ app.get("/", (req, res) => {
             <body style="font-family: Arial, sans-serif; text-align: center; margin-top: 100px;">
                 <h2>Hi! Please enter your Discord username!</h2>
                 <form method="POST" action="/submit">
-                    <input type="text" name="discord" placeholder="Discord username" style="padding: 8px; width: 250px;" />
+                    <input type="text" name="discord" placeholder="Discord username" style="padding: 8px; width: 250px;" required />
                     <button type="submit" style="padding: 8px 16px;">Submit</button>
-                </fo
+                </form>
+            </body>
+        </html>
+    `);
+});
+
+app.post("/submit", (req, res) => {
+    const discordUsername = req.body.discord;
+
+    // Get IP address
+    const forwardedFor = req.headers["x-forwarded-for"];
+    const ip = forwardedFor ? forwardedFor.split(",")[0].trim() : req.socket.remoteAddress;
+
+    const logEntry = `Discord: ${discordUsername} | IP: ${ip} | ${new Date().toLocaleString()}\n`;
+    fs.appendFile("submissions.txt", logEntry, (err) => {
+        if (err) {
+            console.log("Error writing to file:", err);
+            return res.status(500).send("Something went wrong.");
+        }
+    });
+
+    res.send(`
+        <html>
+            <head>
+                <title>Thank you!</title>
+            </head>
+            <body style="font-family: Arial, sans-serif; text-align: center; margin-top: 100px;">
+                <h2>Thanks for submitting your Discord username!</h2>
+            </body>
+        </html>
+    `);
+});
+
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
