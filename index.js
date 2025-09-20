@@ -4,7 +4,8 @@ const fs = require("fs");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Detect real browsers only (Chrome, Firefox, Safari, Edge, Opera)
+// --- UTILS ---
+// Browser detection
 const looksLikeBrowser = (ua) => {
     if (!ua) return false;
     ua = ua.toLowerCase();
@@ -12,7 +13,7 @@ const looksLikeBrowser = (ua) => {
            ua.includes("edg") || ua.includes("opera");
 };
 
-// Simple bot detection
+// Bot detection
 const isBot = (ua) => {
     if (!ua) return false;
     const botKeywords = [
@@ -22,12 +23,11 @@ const isBot = (ua) => {
     return botKeywords.some(keyword => ua.toLowerCase().includes(keyword));
 };
 
-// Only log public IPs
+// Check for public IP
 const isPublicIP = (ip) => {
     if (!ip) return false;
     ip = ip.replace(/^::ffff:/, "");
 
-    // Filter localhost & private ranges
     if (
         ip === "127.0.0.1" ||
         ip === "::1" ||
@@ -42,6 +42,23 @@ const isPublicIP = (ip) => {
     return true;
 };
 
+// Parse user-agent for clean output
+const formatUA = (ua) => {
+    if (!ua) return "Unknown UA";
+
+    const osMatch = ua.match(/\((.*?)\)/); // text inside parentheses
+    const os = osMatch ? osMatch[1].split(";")[0] : "Unknown OS";
+
+    let browser = "Unknown Browser";
+    if (ua.includes("Chrome/")) browser = "Chrome " + ua.split("Chrome/")[1].split(" ")[0];
+    else if (ua.includes("Firefox/")) browser = "Firefox " + ua.split("Firefox/")[1];
+    else if (ua.includes("Safari/") && !ua.includes("Chrome")) browser = "Safari";
+    else if (ua.includes("Edg/")) browser = "Edge " + ua.split("Edg/")[1];
+
+    return `OS: ${os} | Browser: ${browser}`;
+};
+
+// --- ROUTES ---
 app.use(express.urlencoded({ extended: true }));
 
 app.get("/", (req, res) => {
@@ -51,15 +68,18 @@ app.get("/", (req, res) => {
 
     const userAgent = req.headers["user-agent"] || "";
 
-    // Log ONLY if it's a browser, not a bot, and a real public IP
     if (looksLikeBrowser(userAgent) && !isBot(userAgent) && isPublicIP(ip)) {
-        const logEntry = `${ip} | ${userAgent} | ${new Date().toLocaleString()}\n`;
+        const formattedUA = formatUA(userAgent);
+        const logEntry = `${ip} | ${formattedUA} | ${new Date().toLocaleString()}\n`;
+
         fs.appendFile("ips.txt", logEntry, (err) => {
             if (err) console.log("Error writing to file:", err);
         });
-        console.log(`Logged Visitor: ${ip}`);
+
+        // ✅ Console now shows IP + user info
+        console.log(`✅ Logged Visitor: ${ip} | ${formattedUA}`);
     } else {
-        console.log(`Skipped Visitor: ${ip || "Unknown"} (${isBot(userAgent) ? "Bot" : "Not a browser / Private IP"})`);
+        console.log(`⏭️ Skipped Visitor: ${ip || "Unknown"} (${isBot(userAgent) ? "Bot" : "Not a browser / Private IP"})`);
     }
 
     res.send(`
@@ -86,10 +106,13 @@ app.post("/submit", (req, res) => {
     const userAgent = req.headers["user-agent"] || "";
 
     if (looksLikeBrowser(userAgent) && !isBot(userAgent) && isPublicIP(ip)) {
-        const logEntry = `Discord: ${discordUsername} | IP: ${ip} | UA: ${userAgent} | ${new Date().toLocaleString()}\n`;
+        const formattedUA = formatUA(userAgent);
+        const logEntry = `Discord: ${discordUsername} | IP: ${ip} | ${formattedUA} | ${new Date().toLocaleString()}\n`;
         fs.appendFile("submissions.txt", logEntry, (err) => {
             if (err) console.log("Error writing to file:", err);
         });
+
+        console.log(`✅ Logged Submission: ${discordUsername} | ${ip} | ${formattedUA}`);
     }
 
     res.send(`
