@@ -5,46 +5,68 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- UTILS ---
-// Browser detection
-const looksLikeBrowser = (ua) => {
-    if (!ua) return false;
-    ua = ua.toLowerCase();
-    return ua.includes("chrome") || ua.includes("firefox") || ua.includes("safari") ||
-           ua.includes("edg") || ua.includes("opera");
-};
 
-// Improved Bot detection + identification
+// Modern, strong bot detection
 const identifyBot = (ua) => {
     if (!ua) return null;
     ua = ua.toLowerCase();
 
     const botSignatures = [
+        // Social media preview bots
         { keyword: "discordbot", name: "Discord Bot" },
+        { keyword: "facebookexternalhit", name: "Facebook Preview Bot" },
+        { keyword: "instagram", name: "Instagram Preview Bot" },
+        { keyword: "twitterbot", name: "Twitter Bot" },
+        { keyword: "linkedinbot", name: "LinkedIn Bot" },
+        { keyword: "telegrambot", name: "Telegram Bot" },
+        { keyword: "whatsapp", name: "WhatsApp Link Preview" },
+        { keyword: "skypeuripreview", name: "Skype Preview Bot" },
+
+        // Crawlers
         { keyword: "googlebot", name: "Google Crawler" },
         { keyword: "bingbot", name: "Bing Crawler" },
         { keyword: "yandex", name: "Yandex Bot" },
         { keyword: "duckduckbot", name: "DuckDuckGo Bot" },
-        { keyword: "slackbot", name: "Slack Bot" },
-        { keyword: "telegrambot", name: "Telegram Bot" },
-        { keyword: "twitterbot", name: "Twitter Bot" },
-        { keyword: "linkedinbot", name: "LinkedIn Bot" },
+
+        // Generic automation tools
         { keyword: "python-requests", name: "Python Script" },
         { keyword: "axios", name: "Axios Script" },
-        { keyword: "headless", name: "Headless Browser" },
-        { keyword: "wget", name: "Wget Script" },
         { keyword: "curl", name: "cURL Script" },
-        { keyword: "scrapy", name: "Scrapy Crawler" },
-        { keyword: "postmanruntime", name: "Postman Client" },
+        { keyword: "wget", name: "Wget Script" },
+        { keyword: "postmanruntime", name: "Postman" },
         { keyword: "node-fetch", name: "Node Fetch Script" },
-        { keyword: "okhttp", name: "OkHttp Client" },
-        { keyword: "go-http-client", name: "Go HTTP Client" }
+
+        // Headless browser detection
+        { keyword: "headless", name: "Headless Browser" },
+        { keyword: "puppeteer", name: "Puppeteer Script" },
+        { keyword: "playwright", name: "Playwright Script" }
     ];
 
     const found = botSignatures.find(sig => ua.includes(sig.keyword));
     return found ? found.name : null;
 };
 
-// Check for public IP safely
+
+// A real browser checker — stricter
+const looksLikeRealBrowser = (ua) => {
+    if (!ua) return false;
+    ua = ua.toLowerCase();
+
+    // Must contain these
+    if (!ua.includes("mozilla") || !ua.includes("windows") && !ua.includes("linux") && !ua.includes("mac")) {
+        return false;
+    }
+
+    // Must include at least one major browser engine
+    return (
+        ua.includes("chrome/") ||
+        ua.includes("firefox/") ||
+        ua.includes("safari/") ||
+        ua.includes("edg/")
+    );
+};
+
+// Public IP filter
 const isPublicIP = (ip) => {
     if (!ip) return false;
     ip = ip.replace(/^::ffff:/, "");
@@ -65,12 +87,12 @@ const isPublicIP = (ip) => {
     return true;
 };
 
-// Parse user-agent for clean output
+// Clean UA output
 const formatUA = (ua) => {
     if (!ua) return "Unknown UA";
 
     try {
-        const osMatch = ua.match(/\((.*?)\)/); // text inside parentheses
+        const osMatch = ua.match(/\((.*?)\)/);
         const os = osMatch ? osMatch[1].split(";")[0] : "Unknown OS";
 
         let browser = "Unknown Browser";
@@ -80,12 +102,11 @@ const formatUA = (ua) => {
         else if (ua.includes("Edg/")) browser = "Edge " + ua.split("Edg/")[1];
 
         return `OS: ${os} | Browser: ${browser}`;
-    } catch (err) {
+    } catch {
         return "Unknown UA";
     }
 };
 
-// --- ROUTES ---
 app.use(express.urlencoded({ extended: true }));
 
 app.get("/", (req, res) => {
@@ -96,17 +117,15 @@ app.get("/", (req, res) => {
     const userAgent = req.headers["user-agent"] || "";
     const botName = identifyBot(userAgent);
 
-    if (looksLikeBrowser(userAgent) && !botName && isPublicIP(ip)) {
+    // Only log if it's a REAL browser & not a bot
+    if (!botName && looksLikeRealBrowser(userAgent) && isPublicIP(ip)) {
         const formattedUA = formatUA(userAgent);
         const logEntry = `${ip} | ${formattedUA} | ${new Date().toLocaleString()}\n`;
 
-        fs.appendFile("ips.txt", logEntry, (err) => {
-            if (err) console.error("Error writing to file:", err);
-        });
-
+        fs.appendFile("ips.txt", logEntry, () => {});
         console.log(`✅ Logged Visitor: ${ip} | ${formattedUA}`);
     } else {
-        console.log(`⏭️ Skipped Visitor: ${ip || "Unknown"} (${botName ? `Bot: ${botName}` : "Not a browser / Private IP"})`);
+        console.log(`⏭️ Skipped Visitor: ${ip} (${botName || "Not a real browser"})`);
     }
 
     res.send(`
@@ -134,16 +153,14 @@ app.post("/submit", (req, res) => {
     const userAgent = req.headers["user-agent"] || "";
     const botName = identifyBot(userAgent);
 
-    if (looksLikeBrowser(userAgent) && !botName && isPublicIP(ip)) {
+    if (!botName && looksLikeRealBrowser(userAgent) && isPublicIP(ip)) {
         const formattedUA = formatUA(userAgent);
         const logEntry = `Discord: ${discordUsername} | IP: ${ip} | ${formattedUA} | ${new Date().toLocaleString()}\n`;
-        fs.appendFile("submissions.txt", logEntry, (err) => {
-            if (err) console.error("Error writing to file:", err);
-        });
-
+        
+        fs.appendFile("submissions.txt", logEntry, () => {});
         console.log(`✅ Logged Submission: ${discordUsername} | ${ip} | ${formattedUA}`);
     } else {
-        console.log(`⏭️ Skipped Submission from ${ip || "Unknown"} (${botName ? `Bot: ${botName}` : "Not a browser / Private IP"})`);
+        console.log(`⏭️ Skipped Submission from ${ip} (${botName || "Not a real browser"})`);
     }
 
     res.send(`
@@ -158,4 +175,4 @@ app.post("/submit", (req, res) => {
     `);
 });
 
-app.listen(PORT, () => console.log(`✅ Server is running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
